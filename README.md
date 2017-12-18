@@ -22,3 +22,7 @@ Enter a username/password for a Piazza account enrolled in your Piazza course. T
 Visit http://localhost:8080/robot.html to turn on auto-answer robot.
 
 Visit http://localhost:8080/?course=YOURCOURSENAMEHERE to see graphs for your Piazza courses.
+
+## Statistics View
+
+![Forum statistics preview](https://github.com/CurtisFenner/CarrotBot/blob/master/homepreview.png)
