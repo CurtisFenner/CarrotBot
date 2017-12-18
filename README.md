@@ -26,3 +26,7 @@ Visit http://localhost:8080/?course=YOURCOURSENAMEHERE to see graphs for your Pi
 ## Statistics View
 
 ![Forum statistics preview](https://github.com/CurtisFenner/CarrotBot/blob/master/homepreview.png)
+
+## Automatic Response
+
+![Automatic response preview](https://github.com/CurtisFenner/CarrotBot/blob/master/robotpreview.png)
