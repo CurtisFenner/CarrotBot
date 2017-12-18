@@ -17,7 +17,7 @@ Edit `configuration.json` to list your course and any Piazza offerings (see repo
 
     python main.py
 
-Enter a username/password for a Piazza account enrolled in your Piazza course.
+Enter a username/password for a Piazza account enrolled in your Piazza course. This user will read all posts and submit follow-ups to questions!
 
 Visit http://localhost:8080/robot.html to turn on auto-answer robot.
 
