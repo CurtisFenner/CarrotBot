@@ -14,17 +14,8 @@ def toWords(content):
     return [x for x in re.split('[^a-zA-Z0-9]+', content.lower()) if x]
 
 
-atire_puurula_stopwords = set(line.strip()
-                              for line in open('atire_puurula.txt'))
-
-
 def stem(word, stemmer=SnowballStemmer("english")):
     return " ".join([stemmer.stem(w) for w in word.split(" ")])
-
-
-# Include stems of all stopwords
-atire_puurula_stopwords = atire_puurula_stopwords | \
-    set(stem(w) for w in atire_puurula_stopwords)
 
 
 class QuestionPost:
