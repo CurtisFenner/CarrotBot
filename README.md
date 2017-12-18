@@ -9,7 +9,7 @@ CarrotBot for Piazza
     # Dependency for machine learning
     pip install numpy beautifulsoup4 nltk scikit-learn scipy
     
-    https://github.com/CurtisFenner/CarrotBot.git
+    git clone https://github.com/CurtisFenner/CarrotBot.git
     
 ## Running
 
