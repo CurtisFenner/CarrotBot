@@ -1,0 +1,564 @@
+<!doctype html>
+<html>
+<head>
+	<title>Piazza Analyzer Home</title>
+	<link rel="stylesheet" href="/style.css">
+
+	<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+	<script type="text/javascript">
+	google.charts.load('current', {'packages':['corechart', 'line', 'bar']});
+	google.charts.setOnLoadCallback(drawCharts);
+
+	"use strict"
+
+	const MAX_GAP = 14
+
+	const COURSE_NAME = window.location.search.match(/^\?course=(.+)$/)[1]
+	const x = new XMLHttpRequest()
+	x.open("GET", "/configuration.json", false)
+	x.send()
+	var course = JSON.parse(x.responseText).courses.filter(x => x.name == COURSE_NAME)[0]
+	const OFFERINGS = course.offerings// .map(x => x.id)
+
+
+	// RETURNS a sequence of YYYY-MM-DD date strings beginning with begin and
+	// ending with end
+	function dateRange(begin, end) {
+		const low = new Date(begin)
+		const high = new Date(end)
+		const out = []
+		for (let i = 0; true; i++) {
+			const d = new Date(low.getTime() + 24 * 60 * 60 * 1000 * i)
+			const f = d.toISOString().substr(0, 10)
+			if (f > end) {
+				return out
+			}
+			out.push(f)
+		}
+	}
+
+	function filterSmaller(list, p) {
+		let sum = 0
+		for (let i = 0; i < list.length; i++) {
+			sum += (list[i] || 0)
+		}
+		let less = false
+		for (let i = 0; i < list.length; i++) {
+			if (list[i] && list[i] < sum * p) {
+				list[i] = undefined
+				less = true
+			}
+		}
+		if (less) {
+			return filterSmaller(list, p)
+		}
+		return list
+	}
+
+	// RETURNS the transposition of the input matrix
+	function transposed(matrix) {
+		let out = []
+		for (let i = 0; i < matrix[0].length; i++) {
+			let row = []
+			for (let j = 0; j < matrix.length; j++) {
+				row.push(matrix[j][i])
+			}
+			out.push(row)
+		}
+		return out
+	}
+
+	function tabDisplay(div, tabs) {
+		div.innerHTML = ""
+		var form = document.createElement("form")
+		form.id = Math.random()
+		div.appendChild(form)
+
+		div.style.position = "relative"
+		div.style.margin.bottom = "2em"
+		div.className = "wide-chart-plus"
+
+		let out = []
+		let index = 0
+		for (let tab of tabs) {
+			let i = document.createElement("input")
+			if (index == 0) {
+				i.checked = true
+			}
+			i.type = "radio"
+			i.className = "tab"
+			i.setAttribute("form", form.id)
+			i.name = "tab"
+			i.id = form.id + "_" + index
+			div.appendChild(i)
+
+			let t = document.createElement("label")
+			t.className = "tab"
+			t.textContent = tab
+			t.htmlFor = i.id
+			div.appendChild(t)
+
+			let d = document.createElement("div")
+			d.className = "pane"
+			div.appendChild(d)
+
+			let c = document.createElement("div")
+			d.appendChild(c)
+			c.className = "wide-chart"
+			out.push(c)
+			index++
+		}
+		return out
+	}
+
+	function renderTotalBarChart(dictionary, panes, tabs) {
+		"use strict"
+
+		// Get a list of columns
+		var columnMap = {}
+		for (var courseURI in dictionary) {
+			const course = dictionary[courseURI]
+			for (var date in course) {
+				for (var column in course[date]) {
+					const x = course[date][column]
+					if (isFinite(x)) {
+						columnMap[column] = (columnMap[column] || 0) + x
+					}
+				}
+			}
+		}
+
+		var columns = []
+		for (let key in columnMap) {
+			columns.push({key: key, value: columnMap[key]})
+		}
+		columns.sort((a, b) => b.value - a.value)
+		columns = columns.map(x => x.key)
+
+		// Turn the dictionary into a table
+		let rows = [["Course"].concat(columns)]
+		let normalized = [["Course"].concat(columns)]
+
+		for (var courseURI in dictionary) {
+			// Get the courseURI's title (courseURI is a URI; title is a human string)
+			const title = tabs[courseURI]
+			const course = dictionary[courseURI]
+
+			let days = columns.map(x => 0)
+			for (var date in course) {
+				let discussionToday = 0
+				for (let key in course[date]) {
+					discussionToday += course[date][key]
+				}
+				let limit = discussionToday / (2 * columns.length)
+
+				for (let i = 0; i < columns.length; i++) {
+					if (course[date][columns[i]] >= limit) {
+						days[i]++
+					}
+				}
+			}
+			let sum = columns.map(x => 0)
+			for (var date in course) {
+				for (var column in course[date]) {
+					const i = columns.indexOf(column)
+					sum[i] += course[date][column] || 0
+				}
+			}
+			// Push an unnormalized copy into the table
+			rows.push([title].concat(sum.map(x => x)))
+
+			// Normalize the sum in place
+			for (let i = 0; i < sum.length; i++) {
+				if (sum[i] > 0) {
+					sum[i] /= days[i]
+				}
+			}
+			normalized.push([title].concat(sum))
+		}
+
+		var options = {title: "% of Discussion Overall", bars: 'horizontal'}
+		var dataCompareTopic = google.visualization.arrayToDataTable(rows)
+		var dataCompareCourse = google.visualization.arrayToDataTable(transposed(rows))
+		new google.charts.Bar(panes[0]).draw(dataCompareTopic, options)
+		new google.charts.Bar(panes[1]).draw(dataCompareCourse, options)
+
+		options = {title: "% of Discussion Per Day", bars: 'horizontal'}
+		var dataCompareTopicN = google.visualization.arrayToDataTable(normalized)
+		var dataCompareCourseN = google.visualization.arrayToDataTable(transposed(normalized))
+		new google.charts.Bar(panes[2]).draw(dataCompareTopicN, options)
+		new google.charts.Bar(panes[3]).draw(dataCompareCourseN, options)
+	}
+
+	function renderSentimentChart(dictionary, div, courseID) {
+		"use strict"
+		console.log("renderSentimentChart", dictionary)
+
+		var dateSet = []
+		for (let date in dictionary) {
+			dateSet.push(date)
+		}
+		dateSet.sort()
+		const dates = dateRange(dateSet[0], dateSet[dateSet.length-1])
+
+		const WINDOW = 4;
+
+		const rows = []
+		var gapLine = false
+		for (let i = 0; i < dates.length; i++) {
+			const date = dates[i]
+
+			// Skips gaps
+			var any = false
+			const left = -Math.floor(MAX_GAP / 2);
+			for (let offset = left; offset < left + MAX_GAP; offset++) {
+				if (dictionary[dates[i + offset]]) {
+					any = true
+				}
+			}
+			if (!any) {
+				if (!gapLine) {
+					let row = []
+					row.push(date)
+					row.push(0)
+					const skipMessage = "Time Skip on " + date
+					row.push(skipMessage)
+					row.push(skipMessage)
+
+					rows.push(row)
+				}
+				gapLine = true
+				continue
+			}
+			gapLine = false
+
+			// Add mean sentiment datum
+			let count = 0
+			let sum = 0
+			for (let j = i - WINDOW; j <= i + WINDOW; j++) {
+				if (dates[j] && dictionary[dates[j]]) {
+					count += dictionary[dates[j]].count
+					sum += dictionary[dates[j]].mean * dictionary[dates[j]].count
+				}
+			}
+			rows.push([date, sum/count, null, null])
+		}
+
+		var data = new google.visualization.DataTable()
+		data.addColumn('string', "Date")
+		data.addColumn('number', "Mean Positivity in " + (2 * WINDOW + 1) + "-Day Window")
+		data.addColumn({type: 'string', role: 'annotation'})
+		data.addColumn({type: 'string', role: 'annotationText'})
+		for (let row of rows) {
+			data.addRow(row)
+		}
+		console.log("sentiment", rows)
+
+		var options = {
+			title: "Sentiment",
+			vAxis: {title: "Positivity"},
+			areaOpacity: 0.9,
+			annotations: {
+				style: 'line',
+			}
+		}
+		var chart = new google.visualization.LineChart(div)
+		chart.draw(data, options)
+	}
+
+	function renderViewChart(dictionary, div, courseID) {
+		"use strict"
+
+		var dates = []
+		for (let date in dictionary) {
+			dates.push(date)
+		}
+		dates.sort()
+		const a = dates[0]
+		const b = dates[dates.length-1]
+
+		dates = dateRange(a, b)
+
+		let source = [] //[["Date", "Average Views", "Gaps",]]
+		var gapLine = false
+		for (let i = 0; i < dates.length - 1; ++i) {
+			let date = dates[i]
+
+			// Skips gaps
+			var any = false
+			const left = -Math.floor(MAX_GAP / 2);
+			for (let offset = left; offset < left + MAX_GAP; offset++) {
+				if (dictionary[dates[i + offset]]) {
+					any = true
+				}
+			}
+			if (!any) {
+				if (!gapLine) {
+					source.push([date, 0, "Time Skip on " + date, "Time Skip on " + date])
+				}
+				gapLine = true
+				continue
+			}
+			gapLine = false
+
+			let today = dictionary[date] || {views: 0, posts: 0}
+			source.push([date, today.views / today.posts, null, null])
+		}
+
+		// Pass the table to Google charts
+		var data = new google.visualization.DataTable()
+		data.addColumn('string', 'Date')
+		data.addColumn('number', 'Average Views')
+		data.addColumn({type: 'string', role: 'annotation'})
+		data.addColumn({type: 'string', role: 'annotationText'})
+		for (let row of source) {
+			data.addRow(row)
+		}
+
+		var options = {
+			title: 'Average Views per Day in ' + courseID,
+			vAxis: {title: 'Views'},
+			areaOpacity: 0.9,
+			curveType: 'function',
+			annotations: {
+				style: 'line',
+			}
+		};
+
+		var chart = new google.visualization.SteppedAreaChart(div);
+		chart.draw(data, options);
+	}
+
+	function renderHistogramChart(dictionary, div, courseID) {
+		console.log("renderHistogramChart")
+		// Get a list of columns
+		let columns = []
+		let dateSet = []
+		for (let date in dictionary) {
+			for (let column in dictionary[date]) {
+				if (columns.indexOf(column) < 0) {
+					columns.push(column)
+				}
+			}
+			dateSet.push(date)
+		}
+		dateSet.sort()
+		let beginDate = dateSet[0]
+		let endDate = dateSet[dateSet.length-1]
+		columns.sort()
+		columns.reverse()
+
+		// Turn the dictionary into a table
+		let rows = []
+		const dates = dateRange(beginDate, endDate)
+		var gapLine = false
+		for (let i = 0; i < dates.length; i++) {
+			const date = dates[i]
+
+			// Skips gaps
+			var any = false
+			const left = -Math.floor(MAX_GAP / 2);
+			for (let offset = left; offset < left + MAX_GAP; offset++) {
+				if (dictionary[dates[i + offset]]) {
+					any = true
+				}
+			}
+			if (!any) {
+				if (!gapLine) {
+					let row = []
+					row.push(date)
+					for (let _ of columns) {
+						row.push(0)
+					}
+					const skipMessage = "Time Skip on " + date
+					row.push(skipMessage)
+					row.push(skipMessage)
+
+					rows.push(row)
+				}
+				gapLine = true
+				continue
+			}
+			gapLine = false
+
+			// Add each of the n data columns
+			let row = []
+			const today = dictionary[date] || {}
+			for (let i = 0; i < columns.length; i++) {
+				row.push(today[columns[i]])
+			}
+			row = filterSmaller(row, 0.03)
+			// Add date and two null columns for annotation
+			rows.push([date].concat(row).concat([null, null]))
+		}
+
+		// Sort rows by date (column 0)
+		rows.sort(function(a, b) {
+			if (a[0] == b[0]) {
+				return 0
+			} else if (a[0] < b[0]) {
+				return -1
+			}
+			return 1
+		})
+
+		// Pass the table to Google charts
+		var data = new google.visualization.DataTable()
+		data.addColumn('string', 'Date')
+		for (let column of columns) {
+			data.addColumn('number', column)
+		}
+		data.addColumn({type: 'string', role: 'annotation'})
+		data.addColumn({type: 'string', role: 'annotationText'})
+		for (let row of rows) {
+			data.addRow(row)
+		}
+		console.log("histo data", rows)
+
+		var options = {
+			title: 'Piazza Activity over time in ' + courseID,
+			vAxis: {title: 'Amount of Discussion'},
+			isStacked: "percent",
+			stacked: 'percent',
+			areaOpacity: 0.9,
+			annotations: {
+				style: 'line',
+			}
+		}
+
+		var chart = new google.visualization.SteppedAreaChart(div)
+		chart.draw(data, options)
+	}
+
+	// Fetches a blob of JSON from `url`
+	// Asynchronously invokes f(blob, ...p) onces the data has loaded
+	// RETURNS nothing
+	function fetch(url, f, ...p) {
+		let xhr = new XMLHttpRequest()
+		xhr.open("GET", url)
+		let first = true
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState != 4) {
+				return
+			}
+			try {
+				let obj = JSON.parse(xhr.responseText)
+				if (first) {
+					first = false
+					f.apply(null, [obj].concat(p))
+				}
+			} catch (e) {
+				console.error(e)
+			}
+		}
+		xhr.send()
+	}
+
+	// RETURNS nothing
+	function fetchMany(urls, f, ...p) {
+		const collected = {}
+		var count = 0
+		const fin = () => {
+			try {
+				if (count == urls.length) {
+					count++
+					f.apply(null, [collected].concat(p))
+				}
+			} catch (e) {
+				console.error(e)
+			}
+		}
+
+		for (let url of urls) {
+			fetch(url, (blob) => {
+				collected[url] = blob
+				count++
+				fin()
+			})
+		}
+		fin()
+	}
+
+	function displayHistograms(div, courses, tabs) {
+		let uris = courses.map(x => x + "/histogram.json")
+
+		let panes = tabDisplay(div, tabs)
+		for (let pane of panes) {
+			pane.textContent = "Fetching data from server for topic histogram..."
+		}
+
+		for (let i = 0; i < panes.length; i++) {
+			fetch(uris[i], renderHistogramChart, panes[i], tabs[i])
+		}
+	}
+
+	function displayTopicsBarChart(div, courses, tabs) {
+		let uris = courses.map(x => x + "/histogram.json")
+		var panes = tabDisplay(div, ["Compare Topics", "Compare Courses", "Normalized Compare Topics", "Normalized Compare Courses"])
+		for (var pane of panes) {
+			pane.textContent = "Fetching data from server for topic-total comparison"
+		}
+		let map = {}
+		for (let i = 0; i < tabs.length; i++) {
+			map[uris[i]] = tabs[i]
+		}
+		fetchMany(uris, renderTotalBarChart, panes, map)
+	}
+
+	function displaySentimentChart(div, courses, tabs) {
+		let uris = courses.map(x => x + "/sentiment.json")
+		var panes = tabDisplay(div, tabs)
+		for (var pane of panes) {
+			pane.textContent = "Fetching data from server for sentiment graph"
+		}
+		for (var i = 0; i < panes.length; i++) {
+			fetch(uris[i], renderSentimentChart, panes[i], tabs[i])
+		}
+	}
+
+	function displayViewChart(div, courses, tabs) {
+		let uris = courses.map(x => x + "/views.json")
+
+		let panes = tabDisplay(div, tabs)
+		for (let i = 0; i < uris.length; i++) {
+			panes[i].textContent = "Fetching data from server for view count graph..."
+			fetch(uris[i], renderViewChart, panes[i], tabs[i])
+		}
+	}
+
+	// RETURNS a new div
+	function addRow() {
+		let el = document.createElement("div")
+		document.getElementById("charts").appendChild(el)
+		document.getElementById("charts").appendChild(document.createElement("br"))
+		return el
+	}
+
+	function drawCharts() {
+		"use strict"
+		try {
+			const all = [COURSE_NAME].concat(OFFERINGS.map(x => COURSE_NAME + "/" + x.id))
+			const all_tabs = [COURSE_NAME].concat(OFFERINGS.map(x => COURSE_NAME + " " + x.term))
+
+			var viewRow = addRow()
+			displayViewChart(viewRow, all, all_tabs)
+
+			var comp = addRow()
+			displayTopicsBarChart(comp, all.slice(1), all_tabs.slice(1))
+
+			var row1 = addRow()
+			displayHistograms(row1, all, all_tabs)
+			
+			var sentimentRow = addRow()
+			displaySentimentChart(sentimentRow, all, all_tabs)
+		} catch (e) {
+			console.error(e)
+		}
+	}
+	</script>
+</head>
+<body>
+	<h1>Piazza Analyzer Home</h1>
+	<div id="charts"></div>
+	<!-- <div id="histogram-div" class="wide-chart"></div> -->
+</body>

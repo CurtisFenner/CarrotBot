@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+	<title>Piazza Robot Activation</title>
+	<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<h1>CarrotBot Robot Activation</h1>
+
+<ul id="courselist">
+
+</ul>
+<script>
+"use strict"
+
+var xh = new XMLHttpRequest()
+xh.open("GET", "/configuration.json", false)
+xh.send()
+
+const CONFIGURATION = JSON.parse(xh.responseText)
+let courses = CONFIGURATION.courses
+courses.sort()
+
+xh = new XMLHttpRequest()
+xh.open("GET", "/robots.json", false)
+xh.send()
+
+const ROBOTS = JSON.parse(xh.responseText)
+
+for (let course of courses) {
+	const bigLI = document.createElement("li")
+
+	const head = document.createElement("b")
+	head.textContent = "Course: " + course.name
+	bigLI.appendChild(head)
+
+	const children = document.createElement("ul")
+	bigLI.appendChild(children)
+
+	course.offerings.sort()
+	for (let offering of course.offerings) {
+		const enabled = ROBOTS[offering.id] || false
+
+		// Create a description of current status
+		const li = document.createElement("li")
+		children.appendChild(li)
+
+		const prefix = document.createElement("span")
+		const name = offering.term
+		prefix.textContent = "CarrotBot for " + name + " is currently ";
+		li.appendChild(prefix)
+
+		const status = document.createElement("b")
+		status.textContent = enabled ? "on" : "off"
+		status.className = enabled ? "on" : "off"
+		li.appendChild(status)
+
+		const suffix = document.createElement("span")
+		suffix.textContent = ". "
+		li.appendChild(suffix)
+
+		// Create a button to switch to opposite status
+		const form = document.createElement("form")
+		form.setAttribute('method', 'POST')
+		form.setAttribute('action', '')
+		li.appendChild(form)
+
+		const iCourse = document.createElement('input')
+		iCourse.type = 'hidden'
+		iCourse.name = 'course'
+		iCourse.value = course.name
+		form.appendChild(iCourse)
+
+		const iOffering = document.createElement('input')
+		iOffering.type = 'hidden'
+		iOffering.name = 'offering'
+		iOffering.value = offering.id
+		form.appendChild(iOffering)
+
+		const iSet = document.createElement('input')
+		iSet.type = 'hidden'
+		iSet.name = 'set'
+		iSet.value = !enabled
+		form.appendChild(iSet)
+
+		const iSubmit = document.createElement('button')
+		iSubmit.setAttribute('type', 'submit')
+		// TODO: sanitize
+		iSubmit.innerHTML = "Turn CarrotBot <b>" + (enabled ? "off" : "on") + "</b> for " + name
+		form.appendChild(iSubmit)
+	}
+
+	courselist.appendChild(bigLI)
+}
+
+</script>
+
+</body>
+</html>
